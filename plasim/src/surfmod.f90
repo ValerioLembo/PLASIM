@@ -1,7 +1,7 @@
       module surfmod
       use pumamod
 
-      character(len=80) :: version = '12.06.2014 by Edi'
+      character(len=80) :: version = '23.05.2021 by Valerio'
 
       integer, parameter :: nsurdim  = 100           ! max # of variables
       integer, parameter :: nsurunit =  35           ! read unit
@@ -346,14 +346,14 @@
        open(11,file=surfmod_namelist)
        read(11,surfmod_nl)
        close(11)
-       write(nud,'(/,"***********************************************")')
+       write(nud,'(/,"********************************************")')
        write(nud,'("* SURFMOD ",a35," *")') trim(version)
-       write(nud,'("***********************************************")')
+       write(nud,'("********************************************")')
        if (naqua /= 0) then
-       write(nud,'("* AQUA planet mode - ignoring land data       *")')
+       write(nud,'(" * AQUA planet mode - ignoring land data       *")')
        endif
-       write(nud,'("* Namelist SURFMOD_NL from <surfmod_namelist> *")')
-       write(nud,'("***********************************************")')
+       write(nud,'(" * Namelist SURFMOD_NL from <surfmod_namelist> *")')
+       write(nud,'(" ***********************************************")')
        write(nud,surfmod_nl)
       endif
 
@@ -368,6 +368,13 @@
          so(:)   = 0.0         ! spectral  orography
          sp(:)   = 0.0         ! spectral  pressure
          spm(:)  = 0.0         ! spectral  pressure scattered
+!
+!    add noise
+!
+         if (mypid == NROOT) then
+          call noise
+         endif
+         call mpscsp(sp,spm,1)
       endif
 
       if (nrestart == 0 .and. naqua == 0) then ! need to read start data

@@ -41,7 +41,7 @@
 !
 !     UPDATE VERSION IDENTIFIER AFTER EACH CODE CHANGE!
 
-plasimversion = "https://github.com/Edilbert/PLASIM/ : 15-Dec-2015"
+plasimversion = "https://github.com/ValerioLembo/PLASIM/ : 23-May-2021"
 
       call mpstart(-1)       ! -1: Start MPI   >=0 arg = MPI_COMM_WORLD
       call setfilenames
@@ -144,7 +144,16 @@ plasimversion = "https://github.com/Edilbert/PLASIM/ : 15-Dec-2015"
          call cpu_time(tmstart)
          write(nud,'(54("*"))')
          write(nud,'("* ",17X,"PLANET SIMULATOR",17X," *")')
-         write(nud,'("* ",a50," *")') plasimversion
+         write(nud,'("* ",50X," *")')
+         write(nud,'("* ",a50," *")') "Version: "//plasimversion
+         write(nud,'("* ",a50," *")') "from "//plasimwww(1:45)
+         if(len_trim(plasimwww) > 45) then
+          write(nud,'("* ",a50," *")') "     "//plasimwww(46:90)
+         endif
+         if(len_trim(plasimwww) > 90) then
+          write(nud,'("* ",a50," *")') "     "//plasimwww(91:)
+         endif
+         write(nud,'("* ",50X," *")')
          write(nud,'(54("*"))')
          if (mrnum > 1) then
             write(nud,'("* Instance ",i3," of ",i3,32x,"*")') &
@@ -312,6 +321,16 @@ plasimversion = "https://github.com/Edilbert/PLASIM/ : 15-Dec-2015"
       call mpbcrn(tfrc  ,NLEV)
       call mpbcrn(tkp   ,NLEV)
 
+      call mpbci(nsppt)
+      call mpbcr(sppts)
+      call mpbcr(spptl)
+      call mpbcr(spptt)
+      call mpbcr(spptpl1)
+      call mpbcr(spptpl2)
+      call mpbcr(spptpt1)
+      call mpbcr(spptpt2)
+      call mpbcr(spptrmax)
+
       call mpbcrn(c     ,NLSQ)
       call mpbcrn(g     ,NLSQ)
       call mpbcrn(tau   ,NLSQ)
@@ -413,6 +432,13 @@ plasimversion = "https://github.com/Edilbert/PLASIM/ : 15-Dec-2015"
 !
 
       call surfini
+
+!
+!*    initialize stochastic parameterization 
+!
+      if(nsppt == 1) then
+       call spptrinit
+      endif 
 
 !
 !*    reset psurf according to orography
@@ -643,6 +669,7 @@ plasimversion = "https://github.com/Edilbert/PLASIM/ : 15-Dec-2015"
 
          call random_seed(get=meed)
          call put_restart_seed('seed',meed,nseedlen)
+         call put_restart_array('ganext',ganext,1,1,1)
 
          call put_restart_array('sz',sz,NRSP,NESP,NLEV)
          call put_restart_array('sd',sd,NRSP,NESP,NLEV)
@@ -745,6 +772,18 @@ plasimversion = "https://github.com/Edilbert/PLASIM/ : 15-Dec-2015"
 
       call surfstop
 
+!
+!*    finish stochastic parameterization
+!
+
+      if(nsppt == 1) then
+       call spptrstop
+      endif
+
+!
+!*    close restart file
+!
+
       if (mypid == NROOT) then
          call restart_stop
       endif
@@ -813,6 +852,7 @@ plasimversion = "https://github.com/Edilbert/PLASIM/ : 15-Dec-2015"
          call get_restart_integer('nstep'   ,nstep)
          call get_restart_integer('naccuout',naccuout)
          call get_restart_seed('seed',meed,nseedlen)
+         call get_restart_array('ganext',ganext,1,1,1)
          call get_restart_array('sz',sz,NRSP,NESP,NLEV)
          call get_restart_array('sd',sd,NRSP,NESP,NLEV)
          call get_restart_array('st',st,NRSP,NESP,NLEV)
@@ -825,6 +865,8 @@ plasimversion = "https://github.com/Edilbert/PLASIM/ : 15-Dec-2015"
 
       call mpbci(nstep)     ! broadcast current timestep
       call mpbci(naccuout)  ! broadcast accumulation timestep for diagnostics
+
+      call mpbcr(ganext)
 
 !     read and scatter spectral arrays
 
@@ -964,14 +1006,15 @@ plasimversion = "https://github.com/Edilbert/PLASIM/ : 15-Dec-2015"
                    , ndiagsp   , ndiagsp2d , ndiagsp3d                  &
                    , ndl     , nentropy, nentro3d, neqsig  , nflux      &
                    , ngui    , nguidbg , nhdiff  , nhordif , nkits      &
-                   , noutput    &
+                   , noutput , nsppt   , spptl   , spptt   , sppts      &
+                   , spptrmax, spptpl1 , spptpl2 , spptpt1 , spptpt2    &
                    , npackgp , npacksp , nperpetual        , nprhor     &
                    , nprint  , nqspec  , nrad    , nsela   , nsync      &
-                   , ntime   , ntspd   , nveg    , nwpd    &
+                   , ntime   , ntspd   , nveg    , nwpd                 &
                    , n_start_year , n_start_month, n_run_steps          &
                    , n_run_years , n_run_months  , n_run_days           &
                    , n_days_per_month, n_days_per_year                  &
-                   , seed    , sellon     &
+                   , seed    , sellon                                   &
                    , syncstr , synctime                                 &
                    , dtep    , dtns    , dtrop   , dttrp                &
                    , tdissd  , tdissz  , tdisst  , tdissq  , tgr        &
@@ -2926,6 +2969,15 @@ plasimversion = "https://github.com/Edilbert/PLASIM/ : 15-Dec-2015"
         endif
        enddo
       endif
+
+!
+!     add gaussian white noise to tendencies (if switched on)
+!
+
+      if(nsppt == 1) then
+       call spptrstep
+      endif
+
 !
 !     de-dimensionalize
 !
@@ -3686,3 +3738,242 @@ plasimversion = "https://github.com/Edilbert/PLASIM/ : 15-Dec-2015"
 !
       return
       end subroutine mkdheat
+
+!     ====================
+!     SUBROUTINE SPPTRINIT
+!     ====================
+
+      subroutine spptrinit
+      use pumamod
+!
+!     initialize the ECMWF revised
+!     Stochastically Perturbed Tendency SCHEME (SPPT)
+!     according to Palmer et al. 2009
+!     (ECMWF Technical Memorandum 598)
+!     Note: changes in 'sum' due to different normalization
+!     (and loop going from n=0 to NTRU)
+!
+!
+      real :: zsppt_sig(NESP)
+!
+      if (mypid ==NROOT) then
+       write(nud,*) ' ***********************************************'
+       write(nud,*) ' * ECMWF Sochastic Perturbed Tendency SCHEME   *'
+       write(nud,*) ' * (revised version)      04.05.2018 by Larry  *'
+       write(nud,*) ' ***********************************************'
+!
+       zdelt=solar_day/real(ntspd)
+       zkt=0.5*(spptl/plarad)**2
+       sppt_phi=AMIN1(exp(-zdelt/spptt),0.99999)
+!
+       zsum=0.
+       do jn=0,NTRU
+        zn=real(jn)
+        zsum=zsum+(2.*zn+0.5)*exp(-zkt*zn*(zn+1.))
+       enddo
+       zf0=SQRT(sppts*sppts*(1.-sppt_phi*sppt_phi)/zsum)
+!
+       write(nud,*) ' PHI      = ',sppt_phi
+       write(nud,*) ' KT       = ',zkt
+       write(nud,*) ' SUM      = ',zsum
+!
+       sppt_sig(:)=0.
+       jr=-1
+       do jm=0,NTRU
+        do jn=jm,NTRU
+         jr=jr+2
+         ji=jr+1
+         zn=real(jn)
+         sppt_sig(jr)=zf0*exp(-zkt*zn*(zn+1.)*0.5)
+         if(jm > 0) then
+          sppt_sig(ji)=sppt_sig(jr)
+         endif
+        enddo
+       enddo
+!
+       write(nud,*) ' SIG(0)   = ',sppt_sig(1)
+       write(nud,*) ' SIG(1)   = ',sppt_sig(3)
+       write(nud,*) ' SIG(NTRU)= ',sppt_sig(NRSP)
+       write(nud,*) '  '
+!
+       if(nrestart==0) then
+        do jsp=1,NRSP
+         zr=gasdev()
+         sppt_r(jsp)=1./SQRT(1.-sppt_phi*sppt_phi)*sppt_sig(jsp)*zr
+        enddo
+       else
+        call get_restart_array('sppt_r',sppt_r,NRSP,NESP,1)
+       endif
+      endif 
+!
+      call mpbcrn(sppt_r,NESP)
+!
+      return
+      end
+
+!     ====================
+!     SUBROUTINE SPPTRSTEP
+!     ====================
+
+      subroutine spptrstep
+      use pumamod
+!
+      real :: zsppt_rgp(NHOR)
+      real :: zfac(NHOR)  
+      real :: zqsat(NHOR),zt(NHOR),zq(NHOR),zcor(NHOR)    
+!
+!     transform spectral noise to gp
+!
+      call sp2fc(sppt_r,zsppt_rgp)
+      call fc2gp(zsppt_rgp,NLON,NLPP)
+!
+!     limit sigma in GP to spptrmax*sigma 
+!
+      zsmax=spptrmax*sppts
+      zsppt_rgp(:)=AMIN1(AMAX1(-zsmax,zsppt_rgp(:)),zsmax)
+!
+      do jlev=1,NLEV
+!
+!     reduce amplitude at surface & top (consider topography for surf.)
+!
+       zfac(:)=1.
+       where (sigma(jlev)*dp(:) > spptpl2/100000.*dp(:))
+        zfac(:)=AMAX1(0.,(spptpl1-sigma(jlev)*100000.)/(spptpl1-spptpl2))
+       endwhere
+       where (dp(:)*sigma(jlev) < spptpt1)
+        zfac(:)=AMAX1(0.,(dp(:)*sigma(jlev)-spptpt2)/(spptpt1-spptpt2))
+       endwhere
+!    
+!     no noise for point which may get q>qsat or q<0 
+!
+       zt(:)=dt(:,jlev)+deltsec2*dtdt(:,jlev)*(1.+zfac(:)*zsppt_rgp(:))
+       zq(:)=dq(:,jlev)+deltsec2*dqdt(:,jlev)*(1.+zfac(:)*zsppt_rgp(:))   
+       zqsat(:)=rdbrv*ra1*exp(ra2*(zt(:)-TMELT)/(zt(:)-ra4))            &
+     &         /(dp(:)*sigma(jlev))
+       zqsat(:)=AMIN1(zqsat(:),rdbrv)
+       zcor(:)=1./(1.-(1./rdbrv-1.)*zqsat(:))
+       zqsat(:)=zqsat(:)*zcor(:)
+       where(zq(:) > zqsat(:) .or. zq(:) < 0.)
+        zfac(:)=0.
+       endwhere
+!
+!     add noise to tendencies
+!
+       dudt(:,jlev)=dudt(:,jlev)*(1.+zfac(:)*zsppt_rgp(:))
+       dvdt(:,jlev)=dvdt(:,jlev)*(1.+zfac(:)*zsppt_rgp(:))
+       dtdt(:,jlev)=dtdt(:,jlev)*(1.+zfac(:)*zsppt_rgp(:))
+       dqdt(:,jlev)=dqdt(:,jlev)*(1.+zfac(:)*zsppt_rgp(:))
+      enddo
+!
+!     compute new noise (AR(1)) in spectral space
+!     (bound noise and AR1 to +/-10 sigma)
+!
+      if(mypid==NROOT) then
+       do jsp=1,NRSP
+        zr=gasdev()
+        zr=AMIN1(AMAX1(-10.,zr),10.)
+        sppt_r(jsp)=sppt_phi*sppt_r(jsp)+sppt_sig(jsp)*zr
+        zsrmax=10.*SQRT(sppt_sig(jsp)/(1.-sppt_phi*sppt_phi))
+        sppt_r(jsp)=AMIN1(AMAX1(-1.*zsrmax,sppt_r(jsp)),zsrmax)
+       enddo
+      endif
+!
+      call mpbcrn(sppt_r,NESP)
+!
+      return
+      end
+
+!     ====================
+!     SUBROUTINE SPPTRSTOP
+!     ====================
+
+      subroutine spptrstop
+      use pumamod
+!
+      if(mypid==NROOT) then 
+       call put_restart_array('sppt_r',sppt_r,NRSP,NESP,1)
+      endif 
+!
+      return
+      end
+
+
+!     =====================
+!     SUBROUTINE ADDNOISEGP
+!     =====================
+
+      subroutine addnoisegp(pdt,pscale,klev)
+      use pumamod
+!
+      real :: pdt(NHOR,klev)
+!
+      real :: zdtp(NHOR,klev)
+      real :: zdt(NLON,NLAT,klev)
+!
+      call mpgagp(zdt,pdt,klev)
+!
+      if(mypid == NROOT) then
+       do jlev=1,klev
+        zm=0.
+        zg=0.
+        do jlat=1,NLAT
+         zm=zm+SUM(zdt(:,jlat,jlev))*gwd(jlat)/REAL(NLON)
+         zg=zg+gwd(jlat)
+        enddo
+        zm=zm/zg
+        zdt(:,:,jlev)=zdt(:,:,jlev)-zm
+        zv=0.
+        do jlat=1,NLAT
+         zv=zv+SUM(zdt(:,jlat,jlev)*zdt(:,jlat,jlev))*gwd(jlat)         &
+     &        /REAL(NLON)
+        enddo
+        zv=zv/zg 
+        if(zv > 0.) then
+         zdt(:,:,jlev)=zdt(:,:,jlev)/zv
+        endif
+        do jlat=1,NLAT
+         do jlon=1,NLON
+          zdt(jlon,jlat,jlev)=zdt(jlon,jlat,jlev)*gasdev()*pscale*zv
+         enddo
+        enddo
+       enddo
+      endif
+!
+      call mpscgp(zdt,zdtp,NLEV)
+!
+      pdt(:,:)=pdt(:,:)+zdtp(:,:)
+!
+      return
+      end
+!
+!     ===============
+!     FUNCTION GASDEV
+!     ===============
+
+!     Gaussian noise generator with zero mean and unit variance.
+
+      real function gasdev() 
+      use pumamod
+      implicit none
+      real :: fr, vx, vy, ra
+
+      if (ganext == 0.0) then
+         ra = 2.0
+         do while (ra >= 1.0 .or. ra < 1.0e-20)
+            call random_number(vx)
+            call random_number(vy)
+            vx = 2.0 * vx - 1.0
+            vy = 2.0 * vy - 1.0
+            ra = vx * vx + vy * vy
+         enddo
+         fr = sqrt(-2.0 * log(ra) / ra)
+         gasdev = vx * fr
+         ganext = vy * fr
+      else
+         gasdev = ganext
+         ganext = 0.0
+      endif
+
+      return
+      end
+

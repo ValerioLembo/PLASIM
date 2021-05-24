@@ -4,7 +4,8 @@
 !
 !     version identifier (date)
 !
-      character(len=80) :: version = '06.03.2013 by Larry'
+!     character(len=80) :: version = '06.03.2013 by Larry'
+      character(len=80) :: version = '23.05.2021 by Valerio'
 !
 !
 !     Parameter
@@ -50,6 +51,7 @@
       integer :: nentropy = 0      ! switch for entropy diagnostics
       integer :: ngui   = 0        ! switch for gui
       integer :: naout  = 0        ! no additional output fields 
+      integer :: nmaxd  = 1        ! switch for flx due to xmaxd (1=add)
 !
       real :: taunc         =  0.  ! time scale for newtonian cooling
       real :: xmind         = 0.1  ! minimal ice thickness (m)
@@ -114,15 +116,15 @@
 !
 !     Climatological fields
 !
-      real :: xclsst(NHOR,0:13) =-999.! climatological sst
-      real :: xclicec(NHOR,0:13)=-999.! climatological ice cover
-      real :: xcliced(NHOR,0:13)=-999.! climatological ice thickness
-      real :: xflxice(NHOR,0:13)= 0.! flux correction (W/m^2)
-      real :: xclsst2(NHOR)   = 0.  ! climatological sst
-      real :: xclssto(NHOR)   = 0.  ! climatological sst (t-1)
-      real :: xclicec2(NHOR)  = 0.  ! climatological ice cover
-      real :: xcliced2(NHOR)  = 0.  ! climatological ice thickness
-      real :: xflxice2(NHOR)  = 0.  ! flux correction (W/m^2)
+      real :: xclsst(NHOR,0:13) =273.15 ! climatological sst
+      real :: xclicec(NHOR,0:13)=-999.  ! climatological ice cover
+      real :: xcliced(NHOR,0:13)=-999.  ! climatological ice thickness
+      real :: xflxice(NHOR,0:13)= 0.    ! flux correction (W/m^2)
+      real :: xclsst2(NHOR)   = 0.      ! climatological sst
+      real :: xclssto(NHOR)   = 0.      ! climatological sst (t-1)
+      real :: xclicec2(NHOR)  = 0.      ! climatological ice cover
+      real :: xcliced2(NHOR)  = 0.      ! climatological ice thickness
+      real :: xflxice2(NHOR)  = 0.      ! flux correction (W/m^2)
 !
 !     fluxes for coupling to the ocean (accumulated)
 !
@@ -256,7 +258,7 @@
 !
       namelist/icemod_nl/nout,nfluko,nperpetual_ice,ntspd,nprint,nprhor &
      &               ,nentropy,nice,nsnow,ntskin,ncpl_ice_ocean,taunc   &
-     &               ,xmind,xmaxd,thicec,newsurf,naout
+     &               ,xmind,xmaxd,thicec,newsurf,naout,nmaxd
 !
 !     copy input parameter to icemod
 !
@@ -313,6 +315,7 @@
       call mpbci(nprhor)
       call mpbci(nentropy)
       call mpbci(naout)
+      call mpbci(nmaxd)
       call mpbcr(taunc)
       call mpbcr(xmind)
       call mpbcr(xmaxd)
@@ -326,6 +329,12 @@
       if (nrestart == 0) then ! read start file
        
          call read_ice_surface
+!
+!        limit ice thickness to xmaxd (if set)
+!
+         if(xmaxd > 0.) then
+          xcliced(:,:)=AMIN1(xcliced(:,:),xmaxd)
+         endif
 !
 !        initialize
 !
@@ -369,6 +378,7 @@
          call mpgetgp('csnow'   ,csnow   ,NHOR, 1)
          call mpgetgp('xflxicea',xflxicea,NHOR, 1)
          call mpgetgp('xheata'  ,xheata  ,NHOR, 1)
+         call mpgetgp('xcfluxr' ,xcfluxr ,NHOR, 1)
          call mpgetgp('xofluxa' ,xofluxa ,NHOR, 1)
          call mpgetgp('xqmelta' ,xqmelta ,NHOR, 1)
          call mpgetgp('xcfluxa' ,xcfluxa ,NHOR, 1)
@@ -475,7 +485,6 @@
       xscflx(:)=0.
       xcfluxn(:)=0.
       xsndch(:)=0.
-      xcfluxr(:)=0.
 !
 !     copy input to icemod
 !
@@ -493,6 +502,13 @@
       xtaux(:)=ptaux(:)
       xtauy(:)=ptauy(:)
       xust3(:)=pust3(:)
+!
+!     Add (sub) residual flux due to limit of ice to xmaxd
+!     (if switched on by nmaxd)
+!
+      if(nmaxd > 0) then
+       xheat(:) = xheat(:) - xcfluxr(:)
+      endif
 !
 !     get climatology
 !
@@ -643,19 +659,14 @@
 !     update ximelt
 !
       zcflux(:)=0.
+      xcfluxr(:)=0.
       if(xmaxd >= 0.) then 
        where(xiced(:) > xmaxd)
         zcflux(:)=(xiced(:)-xmaxd)*zrhoilfdt
         xiced(:)=xmaxd
         xcfluxr(:)=xcfluxr(:)+zcflux(:)
         ximelt(:)=ximelt(:)+zcflux(:)
-!
-!       diagnose the lost ice as accumulated snow 
-!       (to make the budged from the atm. output) 
-!
-        xsndch(:)=xsndch(:)+zcflux(:)*1000./CRHOI/zrhoilfdt/xdt
        end where
-       call getiflx
       endif
 !
 !     depug print out if needed
@@ -936,6 +947,7 @@
       call mpputgp('csnow'   ,csnow   ,NHOR, 1)
       call mpputgp('xflxicea',xflxicea,NHOR, 1)
       call mpputgp('xheata'  ,xheata  ,NHOR, 1)
+      call mpputgp('xcfluxr' ,xcfluxr ,NHOR, 1)
       call mpputgp('xofluxa' ,xofluxa ,NHOR, 1)
       call mpputgp('xqmelta' ,xqmelta ,NHOR, 1)
       call mpputgp('xcfluxa' ,xcfluxa ,NHOR, 1)
@@ -1883,39 +1895,3 @@
 
       return
       end subroutine make_ice_thickness
-
-!     ==================
-!     SUBROUTINE GETIFLX
-!     ==================
-
-      subroutine getiflx
-      use icemod
-!
-      real :: zsum(2)
-      real :: zflx(NHOR) = 0.
-!
-      zrhoilfdt=CRHOI*CLFI/xdt
-!
-      where(xls(:) < 1.)
-       zflx(:)=AMAX1(0.,xmaxd-xiced(:))*zrhoilfdt
-      endwhere
-!
-      zsum(1)=SUM(xcfluxr(:)*xgw(:),MASK=(xls(:) < 1.))
-      zsum(2)=SUM(zflx(:)*xgw(:),MASK=(xls(:) < 1.))
-      call mpsumbcr(zsum,2)
-!
-      if(zsum(1) > 0. .and. zsum(2) > 0.) then
-       zfac=zsum(1)/zsum(2)
-       if(zfac <= 1.) then
-        where(xls(:) < 1.)
-         zflx(:)=zflx(:)*zfac
-        endwhere
-       endif
-       where(xls(:) < 1.)
-        xcfluxr(:)=xcfluxr(:)-zflx(:)
-        xcflux(:)=xcflux(:)-zflx(:)
-       endwhere
-      endif
-!
-      return
-      end subroutine getiflx      

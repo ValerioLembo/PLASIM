@@ -4,7 +4,7 @@
 !
 !     version identifier (date)
 !
-      character(len=80) :: version = '13.10.2005 by Larry'
+      character(len=80) :: version = '23.05.2021 by Valerio'
 !
 !     Parameter
 !
@@ -93,8 +93,8 @@
       real :: ydsst(NHOR)  = 0.         ! heat flux from vdiff (w/m2)
       real :: yqhd(NHOR)   = 0.         ! heat flux from hdiff (w/m2)
 
-      real :: yclsst(NHOR,0:13)         ! climatological sst (K)
-      real :: yfsst(NHOR,0:13) = 0.     ! flux corr. sst (W/m**2)
+      real :: yclsst(NHOR,0:13) = 273.15 ! climatological sst (K)
+      real :: yfsst(NHOR,0:13) = 0.      ! flux corr. sst (W/m**2)
 
       real :: yclsst2(NHOR) = 0.        ! climatological sst (K)
       real :: yfsst2(NHOR) = 0.         ! flux corr. sst (W/m**2)

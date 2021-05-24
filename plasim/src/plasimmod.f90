@@ -152,7 +152,7 @@
       integer :: noutput  =  1  ! master switch for output: 0=no output
       integer :: nafter   =  0  ! write data interval: 0 = once per day
       integer :: naqua    =  0  ! 1: switch to aqua planet mode
-      integer :: nveg     =  1  ! 1: run vegetation module
+      integer :: nveg     =  0  ! 1: run vegetation module
       integer :: ncoeff   =  0  ! number of modes to print
       integer :: ndiag    =  0  ! write diagnostics interval 0 = every 10th. day
       integer :: ngui     =  0  ! 1: run with GUI
@@ -191,6 +191,7 @@
       integer :: nspinit  = 0   ! switch for LnPs initialization
       integer :: nsponge  = 0   ! switch for top sponge layer
       integer :: nqspec   = 1   ! 1: spectral q   0: gridpoint q (semi-Langrangian)
+      integer :: nsppt    = 0   ! 1: stochastic perturbed param. tendency
 
 !     ***********************
 !     * Global Real Scalars *
@@ -219,6 +220,15 @@
       real :: evap  =     0.0  ! diagnostic evaporation
       real :: olr   =     0.0  ! Outgoing longwave radiation
       real :: dampsp=     0.0  ! damping time (days) for sponge layer
+      real :: spptl =  500.E3  ! sppt coorelation length (see nsppt) [m]  
+      real :: spptt = 21600.0  ! sppt decorrelation timescale (see nsppt)[s]
+      real :: sppts =     0.5  ! sppt amplitude (sigma) (see nsppt)  
+      real :: spptrmax =  3.   ! sppt cut for r [std] (see nsppt)  
+      real :: spptpl1=96000.   ! sppt lower cut for lower atm. [Pa]
+      real :: spptpl2=85000.   ! sppt upper cut for lower atm. [Pa]
+      real :: spptpt1=10000.   ! sppt lower cut for upper atm. [Pa]
+      real :: spptpt2= 5000.   ! sppt upper cut for lower atm. [Pa]
+      real :: sppt_phi         ! sppt AR1 (autocor.)
 
 !     **************************
 !     * Global Spectral Arrays *
@@ -256,6 +266,9 @@
       real :: sakpp(NSPP,NLEV) = 0.0 ! horizontal diffusion partial
       real :: sqout(NESP,NLEV) = 0.0 ! specific humidity for output
       real :: spnorm(NESP)     = 0.0 ! Factors for output normalization
+
+      real :: sppt_r(NESP)     = 0.0 ! noise for sppt (see nsppt)
+      real :: sppt_sig(NESP)   = 0.0 ! factor for sppt (see nsppt)
 
       integer :: nindex(NESP) = NTRU ! Holds wavenumber
       integer :: nscatsp(NPRO)= NSPP ! Used for reduce_scatter op
@@ -476,6 +489,7 @@
       
       integer              :: seed(8) = 0 ! settable in namelist
       integer, allocatable :: meed(:)     ! machine dependent seed
+      real                 :: ganext  = 0.! for gaussian white noise
       
 !     **********************
 !     * Multirun variables *
@@ -493,12 +507,13 @@
       real    :: syncstr  =  0.0 ! Coupling strength (0 .. 1)
       real    :: synctime =  0.0 ! Coupling time [days]
 
-!     **********************************************
-!     * version identifier (to be set in puma.f90) *
-!     * will be printed in puma sub *prolog*       *
-!     **********************************************
+!     ************************************************************
+!     * download page and version identifier (set in plasim.f90) *
+!     * will be printed in plasim sub *prolog*                   *
+!     ************************************************************
 
-      character(len=80) :: plasimversion
+      character(len=135):: plasimwww
+      character(len=41) :: plasimversion
 
 !     ******************************
 !     * Planet dependent variables *

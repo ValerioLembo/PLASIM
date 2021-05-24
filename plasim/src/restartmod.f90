@@ -1,4 +1,8 @@
       module restartmod
+!
+!     version identifier (date)
+!
+      character(len=80) :: version = '23.05.2021'
       integer, parameter :: nresdim  = 200     ! Max number of records
       integer, parameter :: nreaunit =  33     ! FORTRAN unit for reading
       integer, parameter :: nwriunit =  34     ! FORTRAN unit for writing
@@ -20,6 +24,10 @@
       logical :: lrestart
       character (len=*)  :: yrfile
       character (len=16) :: yn ! variable name
+
+      write(nud,'(/," ***********************************************")')
+      write(nud,'(" * RESTARTMOD ",a32," *")') trim(version)
+      write(nud,'(" ***********************************************")')
 
       inquire(file=yrfile,exist=lrestart)
       if (lrestart) then
@@ -128,9 +136,9 @@
          endif
       enddo
       if (nexcheck == 1) then
-         write(nud,*)'*** Error in get_restart_array ***'
+         write(nud,*)'*** WARNING in get_restart_array ***'
          write(nud,*)'Requested array {',yn,'} was not found'
-         stop
+         write(nud,*)'Default values will be used'
       endif
       return
       end subroutine get_restart_array

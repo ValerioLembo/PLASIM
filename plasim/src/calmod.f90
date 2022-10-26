@@ -72,6 +72,7 @@
       else
          kmon = (kyday-1) / n_days_per_month
          kday = kyday - n_days_per_month * kmon
+         kmon = kmon+1
       endif
       return
       end
